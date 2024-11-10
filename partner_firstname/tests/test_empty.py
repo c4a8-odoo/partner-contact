@@ -5,9 +5,10 @@
 
 To have more accurate results, remove the ``mail`` module before testing.
 """
+import psycopg2
+
 from odoo.tests.common import TransactionCase
 
-from .. import exceptions as ex
 from .base import MailInstalled
 
 
@@ -19,9 +20,9 @@ class CompanyCase(TransactionCase):
 
     def tearDown(self):
         try:
-            data = {"name": self.name}
+            data = {"name": False}
             model = self.env[self.model].with_context(**self.context)
-            with self.assertRaises(ex.EmptyNamesError):
+            with self.assertRaises(psycopg2.errors.CheckViolation):
                 model.create(data)
         finally:
             super().tearDown()

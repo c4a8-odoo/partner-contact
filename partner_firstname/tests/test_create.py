@@ -62,6 +62,12 @@ class CompanyCase(PersonCase):
         self.good_values.update(lastname=self.values["name"], firstname=False)
         self.values = self.good_values.copy()
 
+    def test_wrong_name_value(self):
+        """Name for company is taken."""
+
+    def test_wrong_name_value_and_context(self):
+        """Name for company is taken, defaults are ignored"""
+
 
 class UserCase(PersonCase, MailInstalled):
     """Test ``res.users``."""

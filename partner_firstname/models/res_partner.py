@@ -44,38 +44,46 @@ class ResPartner(models.Model):
         it's not appropriate, we must call `create` for each partner individually with
         the correct context.
         """
-        created_partners = self.browse()
+
         for vals in vals_list:
-            partner_context = dict(self.env.context)
-            if (
-                not vals.get("is_company")
-                and self.name_fields_in_vals(vals)
-                and "name" in vals
-            ):
-                del vals["name"]
-                partner_context.pop("default_name", None)
+            is_company = vals.get(
+                "is_company", self.default_get(["is_company"])["is_company"]
+            )
+
+            compute_name = False
+            if self.name_fields_in_vals(vals):
+                compute_name = self._get_computed_name_create(vals)
+
+            if is_company:
+                if "name" in vals:
+                    # name is leading
+                    vals["name"] = self._get_whitespace_cleaned_name(vals["name"])
+                    vals["lastname"] = vals["name"]
+
+                    vals["firstname"] = False
+                elif compute_name:
+                    # fallback to lastname when name missing
+                    vals["name"] = compute_name
+                    vals["lastname"] = compute_name
+                    vals["firstname"] = False
             else:
-                name = vals.get("name", partner_context.get("default_name"))
-                if name is not None:
+                name = vals.get("name", self.env.context.get("default_name"))
+                if compute_name:
+                    vals["name"] = compute_name
+                # overwrite firstname/lastname with name
+                elif name is not None:
                     # Calculate the split fields
                     inverted = self._get_inverse_name(
                         self._get_whitespace_cleaned_name(name),
-                        vals.get(
-                            "is_company", self.default_get(["is_company"])["is_company"]
-                        ),
+                        is_company,
                     )
                     for key, value in inverted.items():
-                        if not vals.get(key) or partner_context.get("copy"):
+                        if not vals.get(key):
                             vals[key] = value
 
-                    # Remove the combined fields
-                    vals.pop("name", None)
-                    partner_context.pop("default_name", None)
-            # pylint: disable=W8121
-            created_partners |= super(
-                ResPartner, self.with_context(partner_context)
-            ).create([vals])
-        return created_partners
+        return super(ResPartner, self.with_context(no_inverse_name=True)).create(
+            vals_list
+        )
 
     def get_extra_default_copy_values(self, order):
         """Method to add '(copy)' suffix to lastname or firstname, depending on name
@@ -105,7 +113,7 @@ class ResPartner(models.Model):
             order = self._get_names_order()
             extra_default_values = self.get_extra_default_copy_values(order)
             default.update(extra_default_values)
-        return super(ResPartner, self.with_context(copy=True)).copy(default)
+        return super().copy(default)
 
     @api.model
     def default_get(self, fields_list):
@@ -143,6 +151,13 @@ class ResPartner(models.Model):
         )
 
     @api.model
+    def _get_computed_name_create(self, vals):
+        return self._get_computed_name(
+            self._get_whitespace_cleaned_name(vals.get("lastname")),
+            self._get_whitespace_cleaned_name(vals.get("firstname")),
+        )
+
+    @api.model
     def _get_computed_name(self, lastname, firstname):
         """Compute the 'name' field according to splitted data.
         You can override this method to change the order of lastname and
@@ -167,6 +182,8 @@ class ResPartner(models.Model):
         The splitting logic is stored separately in :meth:`~._inverse_name`, so
         submodules can extend that method and get whitespace cleaning for free.
         """
+        if self.env.context.get("no_inverse_name"):
+            return
         for record in self:
             # Remove unneeded whitespace
             clean = record._get_whitespace_cleaned_name(record.name)
@@ -268,7 +285,3 @@ class ResPartner(models.Model):
         # Force calculations there
         records._inverse_name()
         _logger.info("%d partners updated installing module.", len(records))
-
-    # Disabling SQL constraint givint a more explicit error using a Python
-    # contstraint
-    _sql_constraints = [("check_name", "CHECK( 1=1 )", "Contacts require a name.")]
