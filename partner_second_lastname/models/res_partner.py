@@ -33,6 +33,14 @@ class ResPartner(models.Model):
         return super().get_extra_default_copy_values(order)
 
     @api.model
+    def _get_computed_name_create(self, vals):
+        return self._get_computed_name(
+            self._get_whitespace_cleaned_name(vals.get("lastname")),
+            self._get_whitespace_cleaned_name(vals.get("firstname")),
+            self._get_whitespace_cleaned_name(vals.get("lastname2")),
+        )
+
+    @api.model
     def _get_computed_name(self, lastname, firstname, lastname2=None):
         """Compute the name combined with the second lastname too.
 
