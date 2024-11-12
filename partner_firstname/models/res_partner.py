@@ -27,6 +27,22 @@ class ResPartner(models.Model):
         readonly=False,
     )
 
+    is_address_readonly = fields.Boolean(compute="_compute_contact_type")
+    is_individual = fields.Boolean(compute="_compute_contact_type")
+
+    @api.depends("is_company", "type", "parent_id")
+    def _compute_contact_type(self):
+        for partner in self:
+            partner.is_address_readonly = not (
+                partner.is_company
+                or not partner.parent_id
+                or partner.type not in ["contact"]
+            )
+            partner.is_individual = not partner.is_company and partner.type in [
+                "contact",
+                "other",
+            ]
+
     @api.model
     def name_fields_in_vals(self, vals):
         """Method to check if any name fields are in `vals`."""
